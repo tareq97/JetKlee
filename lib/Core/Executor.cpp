@@ -3800,7 +3800,7 @@ void Executor::runFunctionAsMain(Function *f,
 				 int argc,
 				 char **argv,
 				 char **envp) {
-  std::vector<ref<Expr> > arguments;
+  std::vector<KValue> arguments;
 
   // force deterministic initialization of memory objects
   srand(1);
@@ -3821,7 +3821,7 @@ void Executor::runFunctionAsMain(Function *f,
   assert(kf);
   Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
   if (ai!=ae) {
-    arguments.push_back(ConstantExpr::alloc(argc, Expr::Int32));
+    arguments.push_back(KValue(ConstantExpr::alloc(argc, Expr::Int32)));
     if (++ai!=ae) {
       Instruction *first = &*(f->begin()->begin());
       argvMO =
@@ -3832,10 +3832,10 @@ void Executor::runFunctionAsMain(Function *f,
       if (!argvMO)
         klee_error("Could not allocate memory for function arguments");
 
-      arguments.push_back(argvMO->getBaseExpr());
+      arguments.push_back(argvMO->getPointer());
 
       if (++ai!=ae) {
-        arguments.push_back(argvMO->getAddressExpr((argc + 1) * NumPtrBytes));
+        arguments.push_back(argvMO->getPointer((argc + 1) * NumPtrBytes));
 
         if (++ai!=ae)
           klee_error("invalid main function (expect 0-3 arguments)");
@@ -3856,8 +3856,7 @@ void Executor::runFunctionAsMain(Function *f,
 
   assert(arguments.size() == f->arg_size() && "wrong number of arguments");
   for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
-    // TODO segment
-    bindArgument(kf, i, *state, KValue(arguments[i]));
+    bindArgument(kf, i, *state, arguments[i]);
 
   if (argvMO) {
     ObjectState *argvOS = bindObjectInState(*state, argvMO, false);
