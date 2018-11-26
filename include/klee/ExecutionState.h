@@ -19,11 +19,11 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "klee/Internal/Module/KInstIterator.h"
+#include "klee/ConcreteValue.h"
 
 #include <map>
 #include <set>
 #include <vector>
-#include <experimental/optional>
 
 namespace klee {
 class Array;
@@ -110,6 +110,7 @@ public:
   struct NondetValue {
       ref<Expr> expr;
       // info about name and where the object was created...
+      NondetValue() : expr(nullptr) {}
       NondetValue(ref<Expr> e, const std::string& n) : expr(e), name(n) {}
       NondetValue(ref<Expr> e, KInstruction *ki, const std::string& n)
       : expr(e), kinstruction(ki), name(n) {}
@@ -120,11 +121,17 @@ public:
 
       bool isSigned{false};
       KInstruction *kinstruction{nullptr};
-      const std::string name;
+      const std::string name{};
+
       // when an instruction that creates a nodet value is called
       // several times, we can assign a sequential number to each
       // of the values here
-      size_t seqNum{0};
+      //size_t seqNum{0};
+
+      // concrete value
+      //MaybeConcreteValue concreteValue;
+      //
+      //bool hasConcreteValue() const { return concreteValue.hasValue(); }
   };
 
   // FIXME: wouldn't unique_ptr be more efficient (no ref<> copying)

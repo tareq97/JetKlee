@@ -15,6 +15,8 @@
 #include <string>
 #include <vector>
 
+#include "ConcreteValue.h"
+
 struct KTest;
 
 namespace llvm {
@@ -29,24 +31,6 @@ namespace klee {
 class ExecutionState;
 class Interpreter;
 class TreeStreamWriter;
-
-// wrapper around APInt that remembers the signdness
-struct ConcreteValue {
-    llvm::APInt value;
-    bool issigned{false};
-
-    ConcreteValue(unsigned numBits, uint64_t val, bool isSigned)
-    : value(numBits, val, isSigned), issigned(isSigned) {}
-
-    bool isSigned() const { return issigned; }
-    uint64_t getZExtValue() const { return value.getZExtValue(); }
-    // makes sense also for unsigned
-    uint64_t getSExtValue() const { return value.getSExtValue(); }
-
-    unsigned getBitWidth() const { return value.getBitWidth(); }
-    // WARNING: not efficient
-    std::string toString() const { return value.toString(10, issigned); }
-};
 
 class InterpreterHandler {
 public:
@@ -142,6 +126,10 @@ public:
   // take on forks. this can be used to drive the interpretation down
   // a user specified path. use null to reset.
   virtual void setReplayPath(const std::vector<bool> *path) = 0;
+
+  // supply a test case to replay from. this can be used to drive the
+  // interpretation down a user specified path. use null to reset.
+  virtual void setReplayNondet(const struct KTest *out) = 0;
 
   // supply a set of symbolic bindings that will be used as "seeds"
   // for the search. use null to reset.
