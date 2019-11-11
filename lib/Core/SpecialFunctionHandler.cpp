@@ -117,7 +117,25 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   // SV-COMP special functions. We could define them using
   // klee_make_symbolic, but if we handle them here,
   // it is much easier to generate counter-examples later.
+  add("__VERIFIER_nondet_bool", handleVerifierNondetBool, true),
+  add("__VERIFIER_nondet_char", handleVerifierNondetChar, true),
   add("__VERIFIER_nondet_int", handleVerifierNondetInt, true),
+  add("__VERIFIER_nondet_float", handleVerifierNondetFloat, true),
+  add("__VERIFIER_nondet_double", handleVerifierNondetDouble, true),
+  add("__VERIFIER_nondet_loff_t", handleVerifierNondetLOffT, true),
+  add("__VERIFIER_nondet_long", handleVerifierNondetLong, true),
+  add("__VERIFIER_nondet_pchar", handleVerifierNondetPChar, true),
+  add("__VERIFIER_nondet_pointer", handleVerifierNondetPointer, true),
+  add("__VERIFIER_nondet_pthread_t", handleVerifierNondetPthreadT, true),
+  add("__VERIFIER_nondet_sector_t", handleVerifierNondetSectorT, true),
+  add("__VERIFIER_nondet_short", handleVerifierNondetShort, true),
+  add("__VERIFIER_nondet_size_t", handleVerifierNondetSizeT, true),
+  add("__VERIFIER_nondet_u32", handleVerifierNondetU32, true),
+  add("__VERIFIER_nondet_uchar", handleVerifierNondetUChar, true),
+  add("__VERIFIER_nondet_uint", handleVerifierNondetUInt, true),
+  add("__VERIFIER_nondet_ulong", handleVerifierNondetULong, true),
+  add("__VERIFIER_nondet_unsigned", handleVerifierNondetUnsigned, true),
+  add("__VERIFIER_nondet_ushort", handleVerifierNondetUShort, true),
 
   // operator delete[](void*)
   add("_ZdaPv", handleDeleteArray, false),
@@ -908,130 +926,186 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
   }
 }
 
-<<<<<<< HEAD
-=======
+void SpecialFunctionHandler::handleVerifierNondetType(ExecutionState &state,
+                                                      KInstruction *target,
+                                                      unsigned size,
+                                                      bool isSigned,
+                                                      const std::string& name) {
+  executor.bindLocal(target, state,
+                     executor.createNondetValue(state, size, isSigned, target, name));
+}
+
 void SpecialFunctionHandler::handleVerifierNondetInt(ExecutionState &state,
                                                      KInstruction *target,
                                                      const std::vector<Cell> &arguments) {
   assert(arguments.empty() && "Wrong number of arguments");
 
-  executor.bindLocal(target, state,
-                     // FIXME: get the right size from DataLayout
-                     executor.createNondetValue(state, Expr::Int32,
-                                                /* isSigned =*/ true, target,
-                                                "__VERIFIER_nondet_int"));
+  handleVerifierNondetType(state, target, Expr::Int32,
+                           /* isSigned = */ true, "__VERIFIER_nondet_int");
 }
 
-void SpecialFunctionHandler::handleMakeNondet(ExecutionState &state,
-                                              KInstruction *target,
-                                              const std::vector<Cell> &arguments) {
-  std::string name = "";
+void SpecialFunctionHandler::handleVerifierNondetUInt(ExecutionState &state,
+                                                      KInstruction *target,
+                                                      const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
 
-  if (arguments.size() != 4) {
-    executor.terminateStateOnError(state,
-        "Incorrect number of arguments to klee_make_nondet", Executor::User);
-    return;
-  }
-
-  name = arguments[2].value->isZero() ? "" : readStringAtAddress(state, arguments[2]);
-  if (name.length() == 0) {
-    name = "unnamed";
-    klee_warning("klee_make_nondet: renamed empty name to \"unnamed\"");
-  }
-
-  if (!arguments[3].getSegment()->isZero() ||
-      !isa<ConstantExpr>(arguments[3].getValue())) {
-    executor.terminateStateOnError(
-      state, "klee_make_nondet identifier is not a constant",
-      Executor::User);
-    return;
-  }
-
-  auto identifier = cast<ConstantExpr>(arguments[3].getValue())->getZExtValue();
-
-  // add the identifier as a suffix
-  name += ":" + std::to_string(identifier);
-
-  // if we already have such a name, attach a number as a suffix
-  // to be able to tell the objects apart
-  auto it = state.identifiedNondetObjects.find(identifier);
-  if (it != state.identifiedNondetObjects.end()) {
-    assert(it->second.size() > 0);
-    name += ":" + std::to_string(it->second.size());
-  }
-
-  Executor::ExactResolutionList rl;
-  executor.resolveExact(state, arguments[0], rl, "make_nondet");
-
-  for (auto it = rl.begin(), ie = rl.end(); it != ie; ++it) {
-    const MemoryObject *mo = it->first.first;
-    mo->setName(name);
-
-    const ObjectState *old = it->first.second;
-    ExecutionState *s = it->second;
-
-    if (old->readOnly) {
-      executor.terminateStateOnError(*s, "cannot make readonly object symbolic",
-                                     Executor::User);
-      return;
-    }
-
-    // FIXME: Type coercion should be done consistently somewhere.
-    bool res;
-    bool success __attribute__ ((unused)) =
-      executor.solver->mustBeTrue(*s,
-                                  EqExpr::create(ZExtExpr::create(arguments[1].value,
-                                                                  Context::get().getPointerWidth()),
-                                                 mo->getSizeExpr()),
-                                  res);
-    assert(success && "FIXME: Unhandled solver failure");
-
-    if (res) {
-      size_t current_num = s->addIdentifiedSymbolic(identifier, mo);
-      assert(current_num > 0);
-
-      if (!executor.replayNondet.empty()) {
-          auto replIt = executor.replayNondet.find(identifier);
-          if (replIt == executor.replayNondet.end()) {
-              // do nothing, the object is concrete and
-              // it has some random value
-              return;
-          }
-
-          if (replIt->second.size() < current_num) {
-            executor.terminateStateOnError(*s,
-                                     "Cannot find instance of '" + name +
-                                     "' in replay nondet",
-                                     Executor::User);
-            return;
-          }
-
-          auto& data = replIt->second[current_num - 1];
-          executor.executeMakeConcrete(*s, mo, data);
-/*
-          std::string value = "[";
-          int n = 0;
-          for (auto byte : data) {
-              if (n++ > 0)
-                  value += " ";
-              value += std::to_string(byte);
-          }
-          value += "]";
-          klee_warning("Set value %s for %s", value.c_str(), name.c_str());
-*/
-      } else {
-        executor.executeMakeSymbolic(*s, mo, name);
-      }
-    } else {
-      executor.terminateStateOnError(*s,
-                                     "wrong size given to klee_make_nondet",
-                                     Executor::User);
-    }
-  }
+  handleVerifierNondetType(state, target, Expr::Int32,
+                           /* isSigned = */ false, "__VERIFIER_nondet_uint");
 }
 
+void SpecialFunctionHandler::handleVerifierNondetBool(ExecutionState &state,
+                                                      KInstruction *target,
+                                                      const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
 
->>>>>>> e64cb30b... Implement __VERIFIER_nondet_int special function
+  handleVerifierNondetType(state, target, Expr::Int8, // XXX: should we use i1?
+                           /* isSigned = */ false, "__VERIFIER_nondet_bool");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetChar(ExecutionState &state,
+                                                      KInstruction *target,
+                                                      const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int8,
+                           /* isSigned = */ true, "__VERIFIER_nondet_char");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetUChar(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int8,
+                           /* isSigned = */ false, "__VERIFIER_nondet_uchar");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetFloat(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, 8*sizeof(float), // XXX: fixme
+                           /* isSigned = */ true, "__VERIFIER_nondet_float");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetDouble(ExecutionState &state,
+                                                        KInstruction *target,
+                                                        const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, 8*sizeof(double), // XXX: fixme
+                           /* isSigned = */ true, "__VERIFIER_nondet_double");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetLOffT(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int32, // XXX: fixme
+                           /* isSigned = */ false, "__VERIFIER_nondet_loff_t");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetLong(ExecutionState &state,
+                                                      KInstruction *target,
+                                                      const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64, // XXX: fixme
+                           /* isSigned = */ true, "__VERIFIER_nondet_long");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetULong(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64,
+                           /* isSigned = */ false, "__VERIFIER_nondet_long");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetPointer(ExecutionState &state,
+                                                         KInstruction *target,
+                                                         const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64, // XXX: fixme
+                           /* isSigned = */ false, "__VERIFIER_nondet_pointer");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetPChar(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64, // XXX: fixme
+                           /* isSigned = */ false, "__VERIFIER_nondet_pchar");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetPthreadT(ExecutionState &state,
+                                                          KInstruction *target,
+                                                          const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64,
+                           /* isSigned = */ false, "__VERIFIER_nondet_pthread_t");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetUShort(ExecutionState &state,
+                                                        KInstruction *target,
+                                                        const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int16,
+                           /* isSigned = */ false, "__VERIFIER_nondet_ushort");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetShort(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int16,
+                           /* isSigned = */ true, "__VERIFIER_nondet_ushort");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetSizeT(ExecutionState &state,
+                                                       KInstruction *target,
+                                                       const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64,
+                           /* isSigned = */ false, "__VERIFIER_nondet_u32");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetU32(ExecutionState &state,
+                                                     KInstruction *target,
+                                                     const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int32,
+                           /* isSigned = */ false, "__VERIFIER_nondet_u32");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetUnsigned(ExecutionState &state,
+                                                          KInstruction *target,
+                                                          const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int32,
+                           /* isSigned = */ false, "__VERIFIER_nondet_unsigned");
+}
+
+void SpecialFunctionHandler::handleVerifierNondetSectorT(ExecutionState &state,
+                                                         KInstruction *target,
+                                                         const std::vector<Cell> &arguments) {
+  assert(arguments.empty() && "Wrong number of arguments");
+
+  handleVerifierNondetType(state, target, Expr::Int64,
+                           /* isSigned = */ false, "__VERIFIER_nondet_sector_t");
+}
+
 void SpecialFunctionHandler::handleMarkGlobal(ExecutionState &state,
                                               KInstruction *target,
                                               const std::vector<Cell> &arguments) {
