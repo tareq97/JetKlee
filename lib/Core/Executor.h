@@ -484,6 +484,9 @@ private:
                                     ref<Expr> e,
                                     ref<ConstantExpr> value);
 
+  std::set<const MemoryObject *>
+  getReachableMemoryObjects(ExecutionState &state);
+
   void checkMemoryUsage();
   void printDebugInstructions(ExecutionState &state);
   void doDumpStates();
