@@ -3686,8 +3686,22 @@ void Executor::executeAlloc(ExecutionState &state,
                             bool zeroMemory,
                             const ObjectState *reallocFrom,
                             size_t allocationAlignment) {
+
   size = optimizer.optimizeExpr(size, true);
-  const llvm::Value *allocSite = state.prevPC->inst;
+  // in 32-bit bitcode, the max object size is 2^32 - 1
+  auto maxSize = ConstantExpr::alloc((1UL << Context::get().getPointerWidth()) - 1,
+                                     Context::get().getPointerWidth());
+  // check the size
+  auto sizeOk = fork(state, UleExpr::create(size, maxSize), true);
+  if (sizeOk.second) {
+    terminateStateOnError(*sizeOk.second,
+                          "memory error: allocated size exceeds address space size", User);
+  }
+
+  assert(sizeOk.first);
+  auto& okstate = *sizeOk.first;
+
+  const llvm::Value *allocSite = okstate.prevPC->inst;
   if (allocationAlignment == 0) {
     allocationAlignment = getAllocationAlignment(allocSite);
   }
@@ -3695,12 +3709,12 @@ void Executor::executeAlloc(ExecutionState &state,
       memory->allocate(size, isLocal, /*isGlobal=*/false,
                        allocSite, allocationAlignment);
   if (!mo) {
-    bindLocal(target, state, 
+    bindLocal(target, okstate,
               KValue(ConstantExpr::alloc(0, Context::get().getPointerWidth())));
   } else {
-    bindLocal(target, state, mo->getPointer());
+    bindLocal(target, okstate, mo->getPointer());
     if (!reallocFrom) {
-      ObjectState *os = bindObjectInState(state, mo, isLocal);
+      ObjectState *os = bindObjectInState(okstate, mo, isLocal);
       if (zeroMemory) {
         os->initializeToZero();
       } else {
@@ -3708,8 +3722,8 @@ void Executor::executeAlloc(ExecutionState &state,
       }
     } else {
       ObjectState *os = new ObjectState(*reallocFrom, mo);
-      state.addressSpace.unbindObject(reallocFrom->getObject());
-      state.addressSpace.bindObject(mo, os);
+      okstate.addressSpace.unbindObject(reallocFrom->getObject());
+      okstate.addressSpace.bindObject(mo, os);
     }
   }
 }
@@ -3813,7 +3827,7 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 
   // fast path: single in-bounds resolution
   ObjectPair op;
-  bool success;
+  bool success = false;
   solver->setTimeout(coreSolverTimeout);
   if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
     address = KValue(toConstant(state, address.getSegment(), "resolveOne failure"),
