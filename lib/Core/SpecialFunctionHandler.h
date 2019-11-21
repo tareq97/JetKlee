@@ -102,6 +102,11 @@ namespace klee {
                                   unsigned size,
                                   bool isSigned,
                                   const std::string& name);
+
+    void putConcreteValue(ExecutionState& state,
+                          const std::string& name, bool isSigned,
+                          KInstruction *target,
+                          ref<Expr> expr);
  
     /* Handlers */
 
