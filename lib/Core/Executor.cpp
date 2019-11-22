@@ -3451,7 +3451,7 @@ void Executor::callExternalFunction(ExecutionState &state,
     if (size > 64) {
         klee_warning_once(target, "Undefined function returns > 64bit object: %s",
                           function->getName().str().c_str());
-        terminateStateOnError(state, "external call failed", User);
+        terminateStateOnError(state, "failed external call", User);
     } else {
         bool isPointer = false;
         if (retTy->isPointerTy()) {
