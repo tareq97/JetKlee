@@ -108,16 +108,27 @@ public:
   // Execution - Control Flow specific
 
   struct NondetValue {
-      ref<Expr> expr;
+      KValue value;
       // info about name and where the object was created...
-      NondetValue() : expr(nullptr) {}
-      NondetValue(ref<Expr> e, const std::string& n) : expr(e), name(n) {}
+      NondetValue() = default;
+
+      NondetValue(ref<Expr> e, const std::string& n) : value(e), name(n) {}
+      NondetValue(const KValue& val, const std::string& n) : value(val), name(n) {}
+
       NondetValue(ref<Expr> e, KInstruction *ki, const std::string& n)
-      : expr(e), kinstruction(ki), name(n) {}
+      : value(e), kinstruction(ki), name(n) {}
+      NondetValue(const KValue& val, KInstruction *ki, const std::string& n)
+      : value(val), kinstruction(ki), name(n) {}
+
       NondetValue(ref<Expr> e, bool sgned, const std::string& n)
-      : expr(e), isSigned(sgned), name(n) {}
+      : value(e), isSigned(sgned), name(n) {}
+      NondetValue(const KValue& val, bool sgned, const std::string& n)
+      : value(val), isSigned(sgned), name(n) {}
+
       NondetValue(ref<Expr> e, bool sgned, KInstruction *ki, const std::string& n)
-      : expr(e), isSigned(sgned), kinstruction(ki), name(n) {}
+      : value(e), isSigned(sgned), kinstruction(ki), name(n) {}
+      NondetValue(const KValue& val, bool sgned, KInstruction *ki, const std::string& n)
+      : value(val), isSigned(sgned), kinstruction(ki), name(n) {}
 
       bool isSigned{false};
       KInstruction *kinstruction{nullptr};
@@ -209,7 +220,7 @@ public:
   // The numbers of times this state has run through Executor::stepInstruction
   std::uint64_t steppedInstructions;
 
-  NondetValue& addNondetValue(ref<Expr> expr, bool isSigned, const std::string& name);
+  NondetValue& addNondetValue(const KValue& val, bool isSigned, const std::string& name);
 
 private:
   ExecutionState() : ptreeNode(0) {}

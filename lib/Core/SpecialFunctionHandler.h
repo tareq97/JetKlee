@@ -101,7 +101,8 @@ namespace klee {
                                   KInstruction *target,
                                   unsigned size,
                                   bool isSigned,
-                                  const std::string& name);
+                                  const std::string& name,
+                                  bool isPointer = false);
 
     void putConcreteValue(ExecutionState& state,
                           const std::string& name, bool isSigned,
