@@ -4287,13 +4287,13 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
     data.resize(sizes[i]);
     res.push_back(std::make_pair(mo->name, data));
   }
-  for (auto& it : state.nondetValues) {
+  for (auto& it : tmp.nondetValues) {
     ref<ConstantExpr> value;
-    bool success = solver->getValue(state, it.value.getValue(), value);
+    bool success = solver->getValue(tmp, it.value.getValue(), value);
     assert(success && "FIXME: Unhandled solver failure");
 
     ref<ConstantExpr> segment;
-    success = solver->getValue(state, it.value.getSegment(), segment);
+    success = solver->getValue(tmp, it.value.getSegment(), segment);
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
 
