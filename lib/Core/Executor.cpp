@@ -3495,11 +3495,18 @@ static const char *okExternalsList[] = { "printf",
                                          "fmod",
                                          "fmodf",
                                          "fmodl",
-
                                          "getpid" };
 static std::set<std::string> okExternals(okExternalsList,
                                          okExternalsList + 
                                          (sizeof(okExternalsList)/sizeof(okExternalsList[0])));
+
+// these are not and may introduce incorrect results.
+// Fail on these if the policy is Pure (for None, the call will fail anyway
+// and for All... well, the user wanted that...)
+static std::set<std::string> nokExternals({"fesetround", "fesetenv",
+                                           "feenableexcept", "fedisableexcept",
+                                           "feupdateenv", "fesetexceptflag",
+                                           "feclearexcept", "feraiseexcept"});
 
 void Executor::callExternalFunction(ExecutionState &state,
                                     KInstruction *target,
@@ -3508,6 +3515,20 @@ void Executor::callExternalFunction(ExecutionState &state,
   // check if specialFunctionHandler wants it
   if (specialFunctionHandler->handle(state, function, target, arguments))
     return;
+
+  if (ExternalCalls == ExternalCallPolicy::Pure &&
+      nokExternals.count(function->getName()) > 0) {
+    terminateStateOnError(state, "failed external call", User);
+    return;
+  }
+
+  if (ExternalCalls == ExternalCallPolicy::None
+      && !okExternals.count(function->getName())) {
+    klee_warning("Disallowed call to external function: %s\n",
+               function->getName().str().c_str());
+    terminateStateOnError(state, "external calls disallowed", User);
+    return;
+  }
 
   if (ExternalCalls == ExternalCallPolicy::Pure
       && !okExternals.count(function->getName())) {
@@ -3541,14 +3562,6 @@ void Executor::callExternalFunction(ExecutionState &state,
         klee_warning_once(target, "Assume that the undefined function %s is pure",
                           function->getName().str().c_str());
     }
-    return;
-  }
-
-  if (ExternalCalls == ExternalCallPolicy::None
-      && !okExternals.count(function->getName())) {
-    klee_warning("Disallowed call to external function: %s\n",
-               function->getName().str().c_str());
-    terminateStateOnError(state, "external calls disallowed", User);
     return;
   }
 
