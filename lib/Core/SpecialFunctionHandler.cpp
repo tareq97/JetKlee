@@ -138,6 +138,8 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("__VERIFIER_nondet_unsigned", handleVerifierNondetUnsigned, true),
   add("__VERIFIER_nondet_ushort", handleVerifierNondetUShort, true),
 
+  add("__VERIFIER_assume", handleAssume, false),
+
   // operator delete[](void*)
   add("_ZdaPv", handleDeleteArray, false),
   // operator delete(void*)
