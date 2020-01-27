@@ -286,23 +286,18 @@ SpecialFunctionHandler::readStringAtAddress(ExecutionState &state,
     return "";
   }
 
-  bool res __attribute__ ((unused));
-  assert(executor.solver->mustBeTrue(state, 
-                                     EqExpr::create(address.getOffset(),
-                                                    op.first->getBaseExpr()),
-                                     res) &&
-         res &&
-         "XXX interior pointer unhandled");
   const MemoryObject *mo = op.first;
   const ObjectState *os = op.second;
 
   assert(isa<ConstantExpr>(mo->size) && "string must not be symbolic size");
-  unsigned size = cast<ConstantExpr>(mo->size)->getZExtValue();
+  size_t size = cast<ConstantExpr>(mo->size)->getZExtValue();
+
+  auto relativeOffset = mo->getOffsetExpr(offsetExpr);
+  // the relativeOffset must be concrete as the address is concrete
+  size_t offset = cast<ConstantExpr>(relativeOffset)->getZExtValue();
 
   std::ostringstream buf;
-
-  unsigned i;
-  for (i = 0; i < size - 1; i++) {
+  for (size_t i = offset; i < size - 1; ++i) {
     ref<Expr> cur = os->read8(i).getValue();
     cur = executor.toUnique(state, cur);
     assert(isa<ConstantExpr>(cur) && 
