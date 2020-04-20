@@ -298,6 +298,12 @@ cl::list<Executor::TerminateReason> ExitOnErrorType(
     cl::ZeroOrMore,
     cl::cat(TerminationCat));
 
+cl::opt<std::string>
+    ErrorFun("error-fn",
+             cl::desc("Call of this function is error (i.e., it is an alias "
+                      "to __assert_fail"),
+             cl::cat(TerminationCat));
+
 cl::opt<unsigned long long> MaxInstructions(
     "max-instructions",
     cl::desc("Stop execution after this many instructions.  Set to 0 to disable (default=0)"),
@@ -1449,6 +1455,9 @@ static inline const llvm::fltSemantics *fpWidthToSemantics(unsigned width) {
 }
 
 
+static inline bool isErrorCall(const llvm::StringRef& name) {
+    return name.equals(ErrorFun);
+}
 
 void Executor::executeCall(ExecutionState &state, 
                            KInstruction *ki,
@@ -1465,6 +1474,11 @@ void Executor::executeCall(ExecutionState &state,
   } else if (f->getName().equals("__INSTR_fail")) {
     state.lastLoopFail = ki->inst;
     // fall-through
+  } else if (isErrorCall(f->getName())) {
+      terminateStateOnError(state,
+                            "ASSERTION FAIL: " + ErrorFun + " called",
+				            Executor::Assert);
+      return;
   }
 
   if (f->getName().equals("__INSTR_check_nontermination_header")) {
