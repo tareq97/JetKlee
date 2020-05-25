@@ -95,7 +95,7 @@ bool RaiseAsmPass::runOnModule(Module &M) {
         None);
     TLI = TM->getSubtargetImpl(*(M.begin()))->getTargetLowering();
 #else
-    TM = NativeTarget->createTargetMachine(HostTriple, "", "", TargetOptions());
+    TM = NativeTarget->createTargetMachine(BitcodeTriple, "", "", TargetOptions());
     TLI = TM->getSubtargetImpl(*(M.begin()))->getTargetLowering();
 #endif
 
