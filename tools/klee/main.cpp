@@ -1438,6 +1438,92 @@ linkWithUclibc(StringRef libDir,
 }
 #endif
 
+std::vector<std::unique_ptr<llvm::Module>>
+loadBitcode(const std::string& inputFile,
+            LLVMContext& ctx,
+            Interpreter::ModuleOptions& Opts) {
+  std::string errorMsg;
+  std::vector<std::unique_ptr<llvm::Module>> loadedModules;
+  if (!klee::loadFile(InputFile, ctx, loadedModules, errorMsg)) {
+    klee_error("error loading program '%s': %s", InputFile.c_str(),
+               errorMsg.c_str());
+  }
+  // Load and link the whole files content. The assumption is that this is the
+  // application under test.
+  // Nothing gets removed in the first place.
+  std::unique_ptr<llvm::Module> M(klee::linkModules(
+      loadedModules, "" /* link all modules together */, errorMsg));
+  if (!M) {
+    klee_error("error loading program '%s': %s", InputFile.c_str(),
+               errorMsg.c_str());
+  }
+
+  llvm::Module *mainModule = M.get();
+  // Push the module as the first entry
+  loadedModules.emplace_back(std::move(M));
+
+  if (WithPOSIXRuntime) {
+    SmallString<128> Path(Opts.LibraryDir);
+    llvm::sys::path::append(Path, "libkleeRuntimePOSIX.bca");
+    klee_message("NOTE: Using POSIX model: %s", Path.c_str());
+    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading POSIX support '%s': %s", Path.c_str(),
+                 errorMsg.c_str());
+
+    std::string libcPrefix = (Libc == LibcType::UcLibc ? "__user_" : "");
+    preparePOSIX(loadedModules, libcPrefix);
+  }
+
+  if (Libcxx) {
+#ifndef SUPPORT_KLEE_LIBCXX
+    klee_error("Klee was not compiled with libcxx support");
+#else
+    SmallString<128> LibcxxBC(Opts.LibraryDir);
+    llvm::sys::path::append(LibcxxBC, KLEE_LIBCXX_BC_NAME);
+    if (!klee::loadFile(LibcxxBC.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading free standing support '%s': %s",
+                 LibcxxBC.c_str(), errorMsg.c_str());
+    klee_message("NOTE: Using libcxx : %s", LibcxxBC.c_str());
+#endif
+  }
+
+  switch (Libc) {
+  case LibcType::KleeLibc: {
+    // FIXME: Find a reasonable solution for this.
+    SmallString<128> Path(Opts.LibraryDir);
+    llvm::sys::path::append(Path, "libklee-libc.bca");
+    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading klee libc '%s': %s", Path.c_str(),
+                 errorMsg.c_str());
+  }
+  /* Falls through. */
+  case LibcType::FreeStandingLibc: {
+    SmallString<128> Path(Opts.LibraryDir);
+    llvm::sys::path::append(Path, "libkleeRuntimeFreeStanding.bca");
+    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading free standing support '%s': %s", Path.c_str(),
+                 errorMsg.c_str());
+    break;
+  }
+  case LibcType::UcLibc:
+    linkWithUclibc(Opts.LibraryDir, loadedModules);
+    break;
+  }
+
+  for (const auto &library : LinkLibraries) {
+    if (!klee::loadFile(library, mainModule->getContext(), loadedModules,
+                        errorMsg))
+      klee_error("error loading free standing support '%s': %s",
+                 library.c_str(), errorMsg.c_str());
+  }
+
+  return loadedModules;
+}
+
 int main(int argc, char **argv, char **envp) {
   atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
 
@@ -1523,91 +1609,14 @@ int main(int argc, char **argv, char **envp) {
   sys::SetInterruptFunction(interrupt_handle);
 
   // Load the bytecode...
-  std::string errorMsg;
-  LLVMContext ctx;
-  std::vector<std::unique_ptr<llvm::Module>> loadedModules;
-  if (!klee::loadFile(InputFile, ctx, loadedModules, errorMsg)) {
-    klee_error("error loading program '%s': %s", InputFile.c_str(),
-               errorMsg.c_str());
-  }
-  // Load and link the whole files content. The assumption is that this is the
-  // application under test.
-  // Nothing gets removed in the first place.
-  std::unique_ptr<llvm::Module> M(klee::linkModules(
-      loadedModules, "" /* link all modules together */, errorMsg));
-  if (!M) {
-    klee_error("error loading program '%s': %s", InputFile.c_str(),
-               errorMsg.c_str());
-  }
-
-  llvm::Module *mainModule = M.get();
-  // Push the module as the first entry
-  loadedModules.emplace_back(std::move(M));
-
   std::string LibraryDir = KleeHandler::getRunTimeLibraryPath(argv[0]);
   Interpreter::ModuleOptions Opts(LibraryDir.c_str(), EntryPoint,
                                   /*Optimize=*/OptimizeModule,
                                   /*CheckDivZero=*/CheckDivZero,
                                   /*CheckOvershift=*/CheckOvershift);
 
-  if (WithPOSIXRuntime) {
-    SmallString<128> Path(Opts.LibraryDir);
-    llvm::sys::path::append(Path, "libkleeRuntimePOSIX.bca");
-    klee_message("NOTE: Using POSIX model: %s", Path.c_str());
-    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
-                        errorMsg))
-      klee_error("error loading POSIX support '%s': %s", Path.c_str(),
-                 errorMsg.c_str());
-
-    std::string libcPrefix = (Libc == LibcType::UcLibc ? "__user_" : "");
-    preparePOSIX(loadedModules, libcPrefix);
-  }
-
-  if (Libcxx) {
-#ifndef SUPPORT_KLEE_LIBCXX
-    klee_error("Klee was not compiled with libcxx support");
-#else
-    SmallString<128> LibcxxBC(Opts.LibraryDir);
-    llvm::sys::path::append(LibcxxBC, KLEE_LIBCXX_BC_NAME);
-    if (!klee::loadFile(LibcxxBC.c_str(), mainModule->getContext(), loadedModules,
-                        errorMsg))
-      klee_error("error loading free standing support '%s': %s",
-                 LibcxxBC.c_str(), errorMsg.c_str());
-    klee_message("NOTE: Using libcxx : %s", LibcxxBC.c_str());
-#endif
-  }
-
-  switch (Libc) {
-  case LibcType::KleeLibc: {
-    // FIXME: Find a reasonable solution for this.
-    SmallString<128> Path(Opts.LibraryDir);
-    llvm::sys::path::append(Path, "libklee-libc.bca");
-    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
-                        errorMsg))
-      klee_error("error loading klee libc '%s': %s", Path.c_str(),
-                 errorMsg.c_str());
-  }
-  /* Falls through. */
-  case LibcType::FreeStandingLibc: {
-    SmallString<128> Path(Opts.LibraryDir);
-    llvm::sys::path::append(Path, "libkleeRuntimeFreeStanding.bca");
-    if (!klee::loadFile(Path.c_str(), mainModule->getContext(), loadedModules,
-                        errorMsg))
-      klee_error("error loading free standing support '%s': %s", Path.c_str(),
-                 errorMsg.c_str());
-    break;
-  }
-  case LibcType::UcLibc:
-    linkWithUclibc(LibraryDir, loadedModules);
-    break;
-  }
-
-  for (const auto &library : LinkLibraries) {
-    if (!klee::loadFile(library, mainModule->getContext(), loadedModules,
-                        errorMsg))
-      klee_error("error loading free standing support '%s': %s",
-                 library.c_str(), errorMsg.c_str());
-  }
+  LLVMContext ctx;
+  auto loadedModules = loadBitcode(InputFile, ctx, Opts);
 
   // FIXME: Change me to std types.
   int pArgc;
