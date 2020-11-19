@@ -3388,6 +3388,36 @@ Executor::getReachableMemoryObjects(ExecutionState &state,
     return retval;
 }
 
+void Executor::reportError(const llvm::Twine &message, const ExecutionState &state, const llvm::Twine &info, const char *suffix, enum TerminateReason termReason) {
+  Instruction *lastInst;
+  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  std::string MsgString;
+  llvm::raw_string_ostream msg(MsgString);
+
+  msg << "Error: " << message << "\n";
+  if (ii.file != "") {
+    msg << "File: " << ii.file << "\n";
+    msg << "Line: " << ii.line << "\n";
+    msg << "assembly.ll line: " << ii.assemblyLine << "\n";
+  }
+  msg << "Stack: \n";
+  state.dumpStack(msg);
+
+  const auto info_str = info.str();
+  if (info_str != "")
+    msg << "Info: \n" << info_str;
+
+  std::string suffix_buf;
+  if (!suffix) {
+    suffix_buf = TerminateReasonNames[termReason];
+    suffix_buf += ".err";
+    suffix = suffix_buf.c_str();
+  }
+
+  interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
+}
+
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if ((CheckLeaks || CheckMemCleanup) && hasMemoryLeaks(state)) {
     if (CheckMemCleanup) {
@@ -3505,8 +3535,12 @@ void Executor::terminateStateOnError(ExecutionState &state,
       for (const auto mo : leaks) {
         info += getKValueInfo(state, mo->getPointer());
       }
-      terminateStateOnError(state, "memory error: memory not cleaned up",
-                            Leak, nullptr, info);
+      std::string message = "memory error: memory not cleaned up";
+      bool notemitted = emittedErrors.insert(std::make_pair(lastInst, message)).second;
+      if (EmitAllErrors || notemitted) {
+        klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
+        reportError(message.c_str(), state, info, suffix, termReason);
+      }
     }
   }
 
@@ -3530,29 +3564,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
   // for a specific error and this is the error (haltExecution is set to true),
   // or if we do not search for a specific error and we haven't emitted this error yet
   if (EmitAllErrors || haltExecution || (ExitOnErrorType.empty() && notemitted)) {
-    std::string MsgString;
-    llvm::raw_string_ostream msg(MsgString);
-    msg << "Error: " << message << "\n";
-    if (ii.file != "") {
-      msg << "File: " << ii.file << "\n";
-      msg << "Line: " << ii.line << "\n";
-      msg << "assembly.ll line: " << ii.assemblyLine << "\n";
-    }
-    msg << "Stack: \n";
-    state.dumpStack(msg);
-
-    std::string info_str = info.str();
-    if (info_str != "")
-      msg << "Info: \n" << info_str;
-
-    std::string suffix_buf;
-    if (!suffix) {
-      suffix_buf = TerminateReasonNames[termReason];
-      suffix_buf += ".err";
-      suffix = suffix_buf.c_str();
-    }
-
-    interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
+    reportError(messaget, state, info, suffix, termReason);
   }
 
   terminateState(state);
