@@ -3493,7 +3493,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
     if (!leaks.empty()) {
       std::string info = "";
       for (const auto mo : leaks) {
-        info += getAddressInfo(state, mo->getPointer());
+        info += getKValueInfo(state, mo->getPointer());
       }
       terminateStateOnError(state, "memory error: memory not cleaned up",
                             Leak, nullptr, info);
