@@ -3541,6 +3541,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
         klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
         reportError(message.c_str(), state, info, suffix, termReason);
       }
+      return terminateState(state);
     }
   }
 
