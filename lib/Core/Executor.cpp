@@ -3374,36 +3374,6 @@ void Executor::reportError(const llvm::Twine &message, const ExecutionState &sta
   interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
 }
 
-void Executor::reportError(const llvm::Twine &message, const ExecutionState &state, const llvm::Twine &info, const char *suffix, enum TerminateReason termReason) {
-  Instruction *lastInst;
-  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
-
-  std::string MsgString;
-  llvm::raw_string_ostream msg(MsgString);
-
-  msg << "Error: " << message << "\n";
-  if (ii.file != "") {
-    msg << "File: " << ii.file << "\n";
-    msg << "Line: " << ii.line << "\n";
-    msg << "assembly.ll line: " << ii.assemblyLine << "\n";
-  }
-  msg << "Stack: \n";
-  state.dumpStack(msg);
-
-  const auto info_str = info.str();
-  if (info_str != "")
-    msg << "Info: \n" << info_str;
-
-  std::string suffix_buf;
-  if (!suffix) {
-    suffix_buf = TerminateReasonNames[termReason];
-    suffix_buf += ".err";
-    suffix = suffix_buf.c_str();
-  }
-
-  interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
-}
-
 void Executor::terminateStateOnExit(ExecutionState &state) {
   if ((CheckLeaks || CheckMemCleanup) && hasMemoryLeaks(state)) {
     if (CheckMemCleanup) {
