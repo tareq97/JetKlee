@@ -1775,6 +1775,13 @@ ref<Expr> Executor::getSizeForAlloca(ExecutionState& state, KInstruction *ki) co
   return size;
 }
 
+static inline bool segmentIsDeleted(ExecutionState& state,
+                                    ref<klee::ConstantExpr> segment) {
+  auto& removedObjs = state.addressSpace.removedObjectsMap;
+  return removedObjs.find(segment->getZExtValue()) != removedObjs.end();
+}
+
+
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
@@ -2320,9 +2327,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
             terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
             break;
         }
+        bool leftDeleted = segmentIsDeleted(state, leftSegment);
+        bool rightDeleted = segmentIsDeleted(state, rightSegment);
+        // some of the segments is deleted or
         // the segments are different and are compared for less or greater (equal) to?
-        if (leftSegment->getZExtValue() != rightSegment->getZExtValue() &&
-                predicate != ICmpInst::ICMP_EQ && predicate != ICmpInst::ICMP_NE) {
+        if (leftDeleted || rightDeleted ||
+            ((leftSegment->getZExtValue() != rightSegment->getZExtValue()) &&
+             (predicate != ICmpInst::ICMP_EQ && predicate != ICmpInst::ICMP_NE))) {
           ObjectPair lookupResult;
           // left is a pointer (and right is not a null, i.e., it is an integer
           // value or another poiner)
