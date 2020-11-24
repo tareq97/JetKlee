@@ -3521,7 +3521,7 @@ void Executor::terminateStateOnError(ExecutionState &state,
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
 
-  if (CheckMemCleanup) {
+  if (CheckMemCleanup && termReason != Executor::Leak) {
     auto leaks = getMemoryLeaks(state);
     if (!leaks.empty()) {
       std::string info = "";
@@ -3534,7 +3534,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
         klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
         reportError(message.c_str(), state, info, suffix, termReason);
       }
-      return terminateState(state);
+      if (shouldExitOn(Executor::Leak))
+        haltExecution = true;
     }
   }
 
