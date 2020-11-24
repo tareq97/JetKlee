@@ -2320,7 +2320,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
             terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
             break;
         }
-        if (leftSegment->getZExtValue() != rightSegment->getZExtValue()) {
+        // the segments are different and are compared for less or greater (equal) to?
+        if (leftSegment->getZExtValue() != rightSegment->getZExtValue() &&
+                predicate != ICmpInst::ICMP_EQ && predicate != ICmpInst::ICMP_NE) {
           ObjectPair lookupResult;
           // left is a pointer (and right is not a null, i.e., it is an integer
           // value or another poiner)
