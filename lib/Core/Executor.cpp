@@ -2324,8 +2324,17 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         if (!leftSegment->isZero()) {
           bool success = state.addressSpace.resolveOneConstantSegment(left, lookupResult);
           if (!success) {
-            terminateStateOnExecError(state, "Failed resolving constant segment");
-            break;
+            auto& removedObjs = state.addressSpace.removedObjectsMap;
+            auto removedIt = removedObjs.find(leftSegment->getZExtValue());
+            if (removedIt == removedObjs.end()) {
+              terminateStateOnExecError(state,
+                                        "Failed resolving constant segment");
+              break;
+            }
+
+            left = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
+                                              leftSegment->getWidth()),
+                          removedIt->second);
           }
           // FIXME: we should assert that the address does not overlap with any of the
           // currently allocated objects...
@@ -2335,8 +2344,18 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         if (!rightSegment->isZero()) {
           bool success = state.addressSpace.resolveOneConstantSegment(right, lookupResult);
           if (!success) {
-            terminateStateOnExecError(state, "Failed resolving constant segment");
-            break;
+            auto& removedObjs = state.addressSpace.removedObjectsMap;
+            auto removedIt = removedObjs.find(rightSegment->getZExtValue());
+            if (removedIt == removedObjs.end()) {
+              terminateStateOnExecError(state,
+                                        "Failed resolving constant segment");
+              break;
+            }
+
+            right = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
+                                               rightSegment->getWidth()),
+                          removedIt->second);
+ 
           }
           right = KValue(ConstantExpr::alloc(VALUES_SEGMENT, rightSegment->getWidth()),
                          const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
@@ -4002,8 +4021,9 @@ void Executor::executeFree(ExecutionState &state,
         terminateStateOnError(*it->second, "free of global", Free, NULL,
                               getKValueInfo(*it->second, addressOptim));
       } else {
-        const_cast<MemoryObject*>(mo)->initializeSymbolicArray(arrayCache);
-        it->second->addressSpace.removedObjectsMap.insert(std::make_pair(mo->segment, mo->symbolicAddress.getValue()));
+        it->second->addressSpace.removedObjectsMap.insert(
+            std::make_pair(mo->segment,
+                           const_cast<MemoryObject*>(mo)->getSymbolicAddress(arrayCache)));
         it->second->addressSpace.unbindObject(mo);
         if (target)
           bindLocal(target, *it->second, KValue(Expr::createPointer(0)));

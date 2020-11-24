@@ -74,7 +74,7 @@ public:
   mutable std::vector< ref<Expr> > cexPreferences;
 
   /// Symbolic address for poiner comparison
-  llvm::Optional<const Array*> symbolicAddress;
+  llvm::Optional<ref<Expr>> symbolicAddress;
 
   // DO NOT IMPLEMENT
   MemoryObject(const MemoryObject &b);
