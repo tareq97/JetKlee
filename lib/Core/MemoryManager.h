@@ -84,7 +84,7 @@ class MemoryAllocator {
 
 
     MmapAllocation deterministicMem{};
-    AllocatorMap lowmemAllocator{};
+    AllocatorMap lowmemAllocator;
 
 public:
     MemoryAllocator(bool determ, bool lowmem, size_t determ_size, void *expectedAddr);
