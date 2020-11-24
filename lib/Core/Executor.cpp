@@ -2322,7 +2322,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
         }
         if (leftSegment->getZExtValue() != rightSegment->getZExtValue()) {
           ObjectPair lookupResult;
-          if (!leftSegment->isZero()) {
+          // left is a pointer (and right is not a null, i.e., it is an integer
+          // value or another poiner)
+          if (!leftSegment->isZero() && !right.isZero()) {
             bool success = state.addressSpace.resolveOneConstantSegment(left, lookupResult);
             if (!success) {
               auto& removedObjs = state.addressSpace.removedObjectsMap;
@@ -2342,6 +2344,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
             left = KValue(ConstantExpr::alloc(VALUES_SEGMENT, leftSegment->getWidth()),
                           const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
           }
+          // right is a pointer (and left is not a null?)
           if (!rightSegment->isZero()) {
             bool success = state.addressSpace.resolveOneConstantSegment(right, lookupResult);
             if (!success) {
