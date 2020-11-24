@@ -2316,68 +2316,68 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     if (!left.getSegment()->isZero() ||
         !right.getSegment()->isZero()) {
 
-        auto *leftSegment = dyn_cast<ConstantExpr>(left.getSegment());
-        if (!leftSegment) {
-            terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
-            break;
-        }
+      auto *leftSegment = dyn_cast<ConstantExpr>(left.getSegment());
+      if (!leftSegment) {
+          terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
+          break;
+      }
 
-        auto *rightSegment = dyn_cast<ConstantExpr>(right.getSegment());
-        if (!rightSegment) {
-            terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
-            break;
-        }
-        bool leftDeleted = segmentIsDeleted(state, leftSegment);
-        bool rightDeleted = segmentIsDeleted(state, rightSegment);
-        // some of the segments is deleted or
-        // the segments are different and are compared for less or greater (equal) to?
-        if (leftDeleted || rightDeleted ||
-            ((leftSegment->getZExtValue() != rightSegment->getZExtValue()) &&
-             (predicate != ICmpInst::ICMP_EQ && predicate != ICmpInst::ICMP_NE))) {
-          ObjectPair lookupResult;
-          // left is a pointer (and right is not a null, i.e., it is an integer
-          // value or another poiner)
-          if (!leftSegment->isZero() && !right.isZero()) {
-            bool success = state.addressSpace.resolveOneConstantSegment(left, lookupResult);
-            if (!success) {
-              auto& removedObjs = state.addressSpace.removedObjectsMap;
-              auto removedIt = removedObjs.find(leftSegment->getZExtValue());
-              if (removedIt == removedObjs.end()) {
-                terminateStateOnExecError(state,
-                                          "Failed resolving constant segment");
-                break;
-              }
-
-              left = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
-                                                leftSegment->getWidth()),
-                            removedIt->second);
+      auto *rightSegment = dyn_cast<ConstantExpr>(right.getSegment());
+      if (!rightSegment) {
+          terminateStateOnExecError(state, "Comparison of symbolic pointers not implemented");
+          break;
+      }
+      bool leftDeleted = segmentIsDeleted(state, leftSegment);
+      bool rightDeleted = segmentIsDeleted(state, rightSegment);
+      // some of the segments is deleted or
+      // the segments are different and are compared for less or greater (equal) to?
+      if (leftDeleted || rightDeleted ||
+          ((leftSegment->getZExtValue() != rightSegment->getZExtValue()) &&
+           (predicate != ICmpInst::ICMP_EQ && predicate != ICmpInst::ICMP_NE))) {
+        ObjectPair lookupResult;
+        // left is a pointer (and right is not a null, i.e., it is an integer
+        // value or another poiner)
+        if (!leftSegment->isZero() && !right.isZero()) {
+          bool success = state.addressSpace.resolveOneConstantSegment(left, lookupResult);
+          if (!success) {
+            auto& removedObjs = state.addressSpace.removedObjectsMap;
+            auto removedIt = removedObjs.find(leftSegment->getZExtValue());
+            if (removedIt == removedObjs.end()) {
+              terminateStateOnExecError(state,
+                                        "Failed resolving constant segment");
+              break;
             }
-            // FIXME: we should assert that the address does not overlap with any of the
-            // currently allocated objects...
-            left = KValue(ConstantExpr::alloc(VALUES_SEGMENT, leftSegment->getWidth()),
-                          const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
-          }
-          // right is a pointer (and left is not a null?)
-          if (!rightSegment->isZero()) {
-            bool success = state.addressSpace.resolveOneConstantSegment(right, lookupResult);
-            if (!success) {
-              auto& removedObjs = state.addressSpace.removedObjectsMap;
-              auto removedIt = removedObjs.find(rightSegment->getZExtValue());
-              if (removedIt == removedObjs.end()) {
-                terminateStateOnExecError(state,
-                                          "Failed resolving constant segment");
-                break;
-              }
 
-              right = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
-                                                 rightSegment->getWidth()),
-                            removedIt->second);
+            left = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
+                                              leftSegment->getWidth()),
+                          removedIt->second);
+          }
+          // FIXME: we should assert that the address does not overlap with any of the
+          // currently allocated objects...
+          left = KValue(ConstantExpr::alloc(VALUES_SEGMENT, leftSegment->getWidth()),
+                        const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
+        }
+        // right is a pointer (and left is not a null?)
+        if (!rightSegment->isZero()) {
+          bool success = state.addressSpace.resolveOneConstantSegment(right, lookupResult);
+          if (!success) {
+            auto& removedObjs = state.addressSpace.removedObjectsMap;
+            auto removedIt = removedObjs.find(rightSegment->getZExtValue());
+            if (removedIt == removedObjs.end()) {
+              terminateStateOnExecError(state,
+                                        "Failed resolving constant segment");
+              break;
+            }
+
+            right = KValue(ConstantExpr::alloc(VALUES_SEGMENT,
+                                               rightSegment->getWidth()),
+                          removedIt->second);
  
-            }
-            right = KValue(ConstantExpr::alloc(VALUES_SEGMENT, rightSegment->getWidth()),
-                           const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
           }
+          right = KValue(ConstantExpr::alloc(VALUES_SEGMENT, rightSegment->getWidth()),
+                         const_cast<MemoryObject*>(lookupResult.first)->getSymbolicAddress(arrayCache));
         }
+      }
     }
 
     switch (predicate) {
