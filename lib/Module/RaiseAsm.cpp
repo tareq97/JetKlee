@@ -70,6 +70,7 @@ bool RaiseAsmPass::runOnInstruction(Module &M, Instruction *I) {
 #else
       Builder.CreateFence(llvm::SequentiallyConsistent);
 #endif
+      I->replaceAllUsesWith(UndefValue::get(I->getType()));
       I->eraseFromParent();
       return true;
     }
