@@ -2311,8 +2311,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
     KValue left = eval(ki, 0, state);
     KValue right = eval(ki, 1, state);
-    llvm::errs() << "left: " << left << "\n";
-    llvm::errs() << "right: " << right << "\n";
 
     // is one of operands pointer and none of them is null?
     if ((!left.getSegment()->isZero() || !right.getSegment()->isZero())
