@@ -3530,7 +3530,8 @@ void Executor::terminateStateOnError(ExecutionState &state,
   Instruction * lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
 
-  if (CheckMemCleanup && termReason != Executor::Leak) {
+  // on abort, we want to report also uncleaned memory
+  if (CheckMemCleanup && termReason == Executor::Abort) {
     auto leaks = getMemoryLeaks(state);
     if (!leaks.empty()) {
       std::string info = "";
@@ -4022,7 +4023,11 @@ Executor::executeAlloc(ExecutionState &state,
       }
     } else {
       ObjectState *os = new ObjectState(*reallocFrom, mo);
-      state.addressSpace.unbindObject(reallocFrom->getObject());
+      auto *oldobj = const_cast<MemoryObject*>(reallocFrom->getObject());
+      state.addressSpace.unbindObject(oldobj);
+      state.addressSpace.removedObjectsMap.insert(
+        std::make_pair(oldobj->segment,
+                       oldobj->getSymbolicAddress(arrayCache)));
       state.addressSpace.bindObject(mo, os);
     }
   }
