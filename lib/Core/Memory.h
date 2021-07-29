@@ -164,7 +164,7 @@ public:
     return KValue(getSegmentExpr(), ConstantExpr::create(offset, Context::get().getPointerWidth()));
   }
   std::string getSegmentString() const {
-    return std::string(&"Segment: " [ segment ]);
+    return std::string("Segment: [" + std::to_string(segment) + "]");
   }
   std::string getSizeString() const {
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
