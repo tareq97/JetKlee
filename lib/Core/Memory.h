@@ -16,6 +16,7 @@
 #include "klee/KValue.h"
 #include "klee/util/BitArray.h"
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringExtras.h"
 
 #include <vector>

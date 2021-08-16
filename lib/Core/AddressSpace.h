@@ -17,6 +17,8 @@
 #include "klee/Internal/System/Time.h"
 #include "klee/KValue.h"
 
+#include "llvm/ADT/Optional.h"
+
 namespace klee {
 class ExecutionState;
 class MemoryObject;
