@@ -179,6 +179,7 @@ namespace klee {
     HANDLER(handleVerifierNondetUnsigned);
     HANDLER(handleVerifierNondetSectorT);
     HANDLER(handlePthreadCreate);
+    HANDLER(handlePthreadJoin);
 #undef HANDLER
   };
 } // End klee namespace
