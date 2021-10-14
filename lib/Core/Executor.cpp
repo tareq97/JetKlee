@@ -4024,10 +4024,10 @@ Executor::executeAlloc(ExecutionState &state,
     } else {
       ObjectState *os = new ObjectState(*reallocFrom, mo);
       auto *oldobj = const_cast<MemoryObject*>(reallocFrom->getObject());
-      state.addressSpace.unbindObject(oldobj);
       state.addressSpace.removedObjectsMap.insert(
         std::make_pair(oldobj->segment,
                        oldobj->getSymbolicAddress(arrayCache)));
+      state.addressSpace.unbindObject(oldobj);
       state.addressSpace.bindObject(mo, os);
     }
   }
