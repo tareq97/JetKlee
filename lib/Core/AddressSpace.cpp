@@ -166,6 +166,7 @@ bool AddressSpace::resolveOne(ExecutionState &state,
       }
     }
 
+    // we found an object, but it is not a unique one
     success = false;
     return true;
   }
