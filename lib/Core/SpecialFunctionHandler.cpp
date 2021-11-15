@@ -174,8 +174,8 @@ static SpecialFunctionHandler::HandlerInfo handlerInfo[] = {
   add("pthread_create", handlePthreadCreate, true),
   add("pthread_join", handlePthreadJoin, true),
   add("pthread_key_create", handleUnsupportedPthread, true),
-  add("pthread_set_specific", handleUnsupportedPthread, true),
-  add("pthread_get_specific", handleUnsupportedPthread, true),
+  add("pthread_setspecific", handleUnsupportedPthread, true),
+  add("pthread_getspecific", handleUnsupportedPthread, true),
 
 #undef addDNR
 #undef add
