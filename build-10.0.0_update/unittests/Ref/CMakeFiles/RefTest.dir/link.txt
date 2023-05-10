@@ -1,0 +1,1 @@
+/usr/bin/c++   -Wall -Wextra -Wno-unused-parameter -O3  -rdynamic CMakeFiles/RefTest.dir/RefTest.cpp.o  -o ../RefTest  ../../lib/libgtest_main.a ../../lib/libkleaverExpr.a ../../lib/libgtest.a -lz /opt/symbiotic/llvm-10.0.1/build/lib/libLLVMSupport.a /opt/symbiotic/llvm-10.0.1/build/lib/libLLVMDemangle.a -lz -lrt -ldl -ltinfo -lm -lz -lrt -ldl -ltinfo -lm -lpthread 

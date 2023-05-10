@@ -81,6 +81,8 @@
 #include <string>
 #include <sys/mman.h>
 #include <vector>
+#include <iostream>
+//#include <fstream>
 
 using namespace llvm;
 using namespace klee;
@@ -1784,6 +1786,8 @@ static inline bool segmentIsDeleted(ExecutionState& state,
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
+
+  //backtrace(ki->inst);
   switch (i->getOpcode()) {
     // Control flow
   case Instruction::Ret: {
@@ -3143,6 +3147,10 @@ void Executor::run(ExecutionState &initialState) {
     KInstruction *ki = state.pc;
     stepInstruction(state);
 
+    //klee::klee_message("This is the instruction, %s", ki->inst->getName().str().c_str());
+
+    //klee::klee_message("This is the function, %s", ki->inst->getFunction()->getName().str().c_str());
+
     executeInstruction(state, ki);
     timers.invoke();
     if (::dumpStates) dumpStates();
@@ -3400,6 +3408,123 @@ Executor::getReachableMemoryObjects(ExecutionState &state,
     return retval;
 }
 
+std::string Executor::getKValueCrashInfo(ExecutionState &state,
+                                     const KValue &address) const{
+  std::string Str;
+  llvm::raw_string_ostream info(Str);
+
+  info << address.getOffset() << "," ;
+  
+
+  //info << "\taddress: " << address.getSegment() << ":" << address.getOffset() << "\n";
+  ref<ConstantExpr> segmentValue;
+  ref<ConstantExpr> offsetValue;
+  if (address.isConstant()) {
+    segmentValue = cast<ConstantExpr>(address.getSegment());
+    offsetValue = cast<ConstantExpr>(address.getOffset());
+  } else {
+    bool success = solver->getValue(state, address, segmentValue, offsetValue);
+    assert(success && "FIXME: Unhandled solver failure");
+    (void) success;
+    //info << "\texample: " << segmentValue->getZExtValue()
+    //    << ":" << offsetValue->getZExtValue() << "\n";
+    std::pair< ref<Expr>, ref<Expr> > res = solver->getRange(state, address.getSegment());
+    //info << "\tsegment range: [" << res.first << ", " << res.second <<"]\n";
+    res = solver->getRange(state, address.getOffset());
+    //info << "\toffset range: [" << res.first << ", " << res.second <<"]\n";
+  }
+  
+  ObjectPair op;
+  bool success = state.addressSpace.resolveOneConstantSegment(
+      KValue(segmentValue, offsetValue), op);
+  //info << "\tpointing to: ";
+  if (!success) {
+    //info << "none\n";
+  } else {
+    const MemoryObject *mo = op.first;
+    std::string alloc_info;
+    mo->getAllocInfo(alloc_info);
+    //info << "object at " << mo->getSegmentString() << " of size "
+    //     << mo->getSizeString() << "\n"
+    //     << "\t\t" << alloc_info << "\n";
+    info << mo->getSizeString() ;
+  }
+
+  return info.str();
+}
+
+
+void Executor::reportErrorWithCrashInfo(std::set<std::string> cv,const llvm::Twine &message, 
+                                          const ExecutionState &state, 
+                                            const llvm::Twine &info, 
+                                              const char *suffix, 
+                                                enum TerminateReason termReason) {
+  Instruction *lastInst;
+  const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+
+  std::string MsgString;
+  //llvm::raw_string_ostream msg(MsgString);
+
+  if(ii.file != ""){
+    MsgString = std::to_string(ii.line);
+  }
+
+  /**
+  auto it = cv.begin();
+  for(int i=0; i < (int)cv.size() ; i++){
+    msg << *it << ",";
+    it++;
+  }
+
+  msg << "Error: " << message << "\n";
+  if (ii.file != "") {
+    msg << "File: " << ii.file << "\n";
+    msg << "Line: " << ii.line << "\n";
+    msg << "assembly.ll line: " << ii.assemblyLine << "\n";
+  }
+
+  msg << "Stack: \n";
+  state.dumpStack(msg);
+
+  const auto info_str = info.str();
+  if (info_str != "")
+    msg << "Info: \n" << info_str;
+
+  msg << "Crash Variables: " << "\n";
+  for(int i=0; i < (int)cv.size() ; i++){
+    msg << "\t" << ii.line << ":" << *it << "\n";
+    it++;
+  }
+  **/
+
+  std::string suffix_buf;
+  if (!suffix) {
+    //suffix_buf = TerminateReasonNames[termReason];
+    suffix_buf += "crash.txt";
+    suffix = suffix_buf.c_str();
+  }
+
+  auto it = cv.begin();
+
+  std::ofstream file;
+  file.open(suffix);
+  file << MsgString << ",";
+  for(int i=0; i < (int)cv.size() ; i++){
+    file << *it << ",";
+    it++;
+  }
+  file.close();
+
+  //std::ifstream f(suffix);
+
+  //std::ifstream f(suffix);
+
+  //if (f.is_open())
+  //  std::cout << f.rdbuf();
+
+  //interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
+}
+
 void Executor::reportError(const llvm::Twine &message, const ExecutionState &state, const llvm::Twine &info, const char *suffix, enum TerminateReason termReason) {
   Instruction *lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
@@ -3579,7 +3704,17 @@ void Executor::terminateStateOnError(ExecutionState &state,
   // for a specific error and this is the error (haltExecution is set to true),
   // or if we do not search for a specific error and we haven't emitted this error yet
   if (EmitAllErrors || haltExecution || (ExitOnErrorType.empty() && notemitted)) {
-    reportError(messaget, state, info, suffix, termReason);
+    std::set<std::string> cv = getCrashVaraibles(state.prevPC->inst,state.prevPC->info);
+    if(cv.size()>0){
+      klee_message("INFO: Crash variable is detected");
+      reportErrorWithCrashInfo(cv, message.c_str(), state, info, suffix, termReason); 
+      reportError(messaget, state, info, suffix, termReason); 
+    }
+    else{
+      klee_message("INFO: Crash variable is not detected.");
+      klee_message("INFO: Crash variable is part is null.");
+      reportError(messaget, state, info, suffix, termReason);
+    }
   }
 
   terminateState(state);
@@ -4262,6 +4397,9 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     if (!unbound)
       break;
   }
+  
+  //klee_message("This is the crash location::");
+  //backtrace(unbound->prevPC->inst->getOperand(0));
 
   // XXX should we distinguish out of bounds and overlapped cases?
   if (unbound) {
@@ -4313,6 +4451,42 @@ KValue Executor::createNondetValue(ExecutionState &state,
   return kval;
 }
 
+std::set<std::string> cv;
+std::set<std::string> Executor::getCrashVaraibles(const llvm::Value *value, const klee::InstructionInfo *lineNo) {
+  if (auto *inst = dyn_cast<llvm::Instruction>(value)) {
+    
+    std::string Str;
+    llvm::raw_string_ostream instString(Str);
+    instString << *(inst);
+    klee_message("I: %s", instString.str().c_str());
+    for (auto operand = inst->op_begin(), ie = inst->op_end(); operand != ie; ++operand) {
+      if (operand->get()->getName().str().size() > 0) {
+        if(operand->get()->getName().str() != "arrayidx" && operand->get()->getName().str() != "idxprom" ){
+          klee_message("Def of: %s", operand->get()->getName().str().c_str());
+          std::string cv_1 = lineNo->line+ ":"+operand->get()->getName().str();
+          cv.insert(cv_1);
+        }
+      } 
+      getCrashVaraibles(operand->get(), lineNo);
+    }
+  }
+  return cv;
+}
+
+void Executor::backtrace(const llvm::Value *value) {
+  if (auto *inst = dyn_cast<llvm::Instruction>(value)) {
+    std::string Str;
+    llvm::raw_string_ostream instString(Str);
+    instString << *(inst);
+    //klee_message("I: %s", instString.str().c_str());
+    for (auto operand = inst->op_begin(), ie = inst->op_end(); operand != ie; ++operand) {
+      if (operand->get()->getName().str().size() > 0) {
+        klee_message("Def of: %s", operand->get()->getName().str().c_str());
+      }
+      backtrace(operand->get());
+    }
+  }
+}
 
 void Executor::executeMakeSymbolic(ExecutionState &state, 
                                    const MemoryObject *mo,

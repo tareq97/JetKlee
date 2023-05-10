@@ -1567,6 +1567,7 @@ loadBitcode(const std::string& inputFile,
 int main(int argc, char **argv, char **envp) {
   atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
 
+  klee_message("We are in Klee message....");
   KCommandLine::HideOptions(llvm::cl::GeneralCategory);
 
   llvm::InitializeNativeTarget();

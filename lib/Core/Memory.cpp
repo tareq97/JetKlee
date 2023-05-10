@@ -25,6 +25,9 @@
 #include "llvm/IR/Value.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/CallSite.h"
+
+
 
 #include <cassert>
 #include <sstream>
@@ -79,7 +82,27 @@ void MemoryObject::getAllocInfo(std::string &result) const {
     info << " allocated at ";
     if (const Instruction *i = dyn_cast<Instruction>(allocSite)) {
       info << i->getParent()->getParent()->getName() << "():";
-      info << *i;
+    } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(allocSite)) {
+      info << "global:" << gv->getName();
+    } else {
+      info << "value:" << *allocSite;
+    }
+  } else {
+    info << " (no allocation info)";
+  }
+  
+  info.flush();
+}
+
+void MemoryObject::getAllocCrashInfo(std::string &result) const {
+  llvm::raw_string_ostream info(result);
+
+  //info << "MO" << id << "[" << getSizeString() << "]";
+  
+  if (allocSite) {
+    info << " allocated at ";
+    if (const Instruction *i = dyn_cast<Instruction>(allocSite)) {
+      info << i->getParent()->getParent()->getName() << "():";
     } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(allocSite)) {
       info << "global:" << gv->getName();
     } else {

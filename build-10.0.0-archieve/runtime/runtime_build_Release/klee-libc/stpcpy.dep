@@ -1,0 +1,2 @@
+/opt/symbiotic/klee/build-10.0.0/runtime/runtime_build_Release/klee-libc/stpcpy.bc: \
+  /opt/symbiotic/klee/runtime/klee-libc/stpcpy.c

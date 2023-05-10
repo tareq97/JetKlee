@@ -135,6 +135,8 @@ public:
   /// Get an identifying string for this allocation.
   void getAllocInfo(std::string &result) const;
 
+  void getAllocCrashInfo(std::string &result) const;
+
   /// Initializes symbolic array
   /// \param array ArrayCache for Creatin the symbolic array
   void initializeSymbolicArray(klee::ArrayCache &array);

@@ -240,6 +240,18 @@ private:
   void executeInstruction(ExecutionState &state, KInstruction *ki);
 
   void run(ExecutionState &initialState);
+  void backtrace(const llvm::Value *value);
+
+  void reportErrorWithCrashInfo(std::set<std::string> cv,const llvm::Twine &message, 
+                                          const ExecutionState &state, 
+                                            const llvm::Twine &info, 
+                                              const char *suffix, 
+                                                enum TerminateReason termReason);
+
+  std::set<std::string> getCrashVaraibles(const llvm::Value *value, const klee::InstructionInfo *lineNo);
+
+  std::string getKValueCrashInfo(ExecutionState &state,
+                                     const KValue &address) const;
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
