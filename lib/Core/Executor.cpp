@@ -1858,6 +1858,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
   case Instruction::Br: {
     BranchInst *bi = cast<BranchInst>(i);
+    backtrace(bi->getOperand(0));
     if (bi->isUnconditional()) {
       transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
     } else {
@@ -4478,7 +4479,7 @@ void Executor::backtrace(const llvm::Value *value) {
     std::string Str;
     llvm::raw_string_ostream instString(Str);
     instString << *(inst);
-    //klee_message("I: %s", instString.str().c_str());
+    klee_message("I: %s", instString.str().c_str());
     for (auto operand = inst->op_begin(), ie = inst->op_end(); operand != ie; ++operand) {
       if (operand->get()->getName().str().size() > 0) {
         klee_message("Def of: %s", operand->get()->getName().str().c_str());
