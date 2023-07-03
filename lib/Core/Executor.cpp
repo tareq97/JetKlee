@@ -595,6 +595,7 @@ Executor::~Executor() {
 
 /***/
 
+
 void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
                                       const Constant *c, 
                                       unsigned offset) {
@@ -761,6 +762,9 @@ void Executor::initializeGlobals(ExecutionState &state) {
       MemoryObject *mo = memory->allocate(size, /*isLocal=*/false,
                                           /*isGlobal=*/true, /*allocSite=*/v,
                                           /*alignment=*/globalObjectAlignment);
+      //klee_message("****************START************************");
+      //Executor::backtrace(v->getOperand(0));
+      //klee_message("****************END************************");
       ObjectState *os = bindObjectInState(state, mo, false);
       globalObjects.insert(std::make_pair(v, mo));
       globalAddresses.insert(std::make_pair(v, mo->getPointer()));
@@ -787,6 +791,11 @@ void Executor::initializeGlobals(ExecutionState &state) {
       MemoryObject *mo = memory->allocate(size, /*isLocal=*/false,
                                           /*isGlobal=*/true, /*allocSite=*/v,
                                           /*alignment=*/globalObjectAlignment);
+      klee_message("****************START************************");
+      backtrace(v->getOperand(0));
+      
+      klee_message("****************END************************");
+      
       if (!mo)
         llvm::report_fatal_error("out of memory");
       ObjectState *os = bindObjectInState(state, mo, false);
@@ -1858,7 +1867,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
   case Instruction::Br: {
     BranchInst *bi = cast<BranchInst>(i);
-    backtrace(bi->getOperand(0));
+    backtrace(ki->inst->getOperand(0));
     if (bi->isUnconditional()) {
       transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
     } else {
@@ -3204,7 +3213,7 @@ std::string Executor::getKValueInfo(ExecutionState &state,
          << mo->getSizeString() << "\n"
          << "\t\t" << alloc_info << "\n";
   }
-
+  
   return info.str();
 }
 
@@ -3409,49 +3418,13 @@ Executor::getReachableMemoryObjects(ExecutionState &state,
     return retval;
 }
 
-std::string Executor::getKValueCrashInfo(ExecutionState &state,
-                                     const KValue &address) const{
-  std::string Str;
-  llvm::raw_string_ostream info(Str);
-
-  info << address.getOffset() << "," ;
-  
-
-  //info << "\taddress: " << address.getSegment() << ":" << address.getOffset() << "\n";
-  ref<ConstantExpr> segmentValue;
-  ref<ConstantExpr> offsetValue;
-  if (address.isConstant()) {
-    segmentValue = cast<ConstantExpr>(address.getSegment());
-    offsetValue = cast<ConstantExpr>(address.getOffset());
-  } else {
-    bool success = solver->getValue(state, address, segmentValue, offsetValue);
-    assert(success && "FIXME: Unhandled solver failure");
-    (void) success;
-    //info << "\texample: " << segmentValue->getZExtValue()
-    //    << ":" << offsetValue->getZExtValue() << "\n";
-    std::pair< ref<Expr>, ref<Expr> > res = solver->getRange(state, address.getSegment());
-    //info << "\tsegment range: [" << res.first << ", " << res.second <<"]\n";
-    res = solver->getRange(state, address.getOffset());
-    //info << "\toffset range: [" << res.first << ", " << res.second <<"]\n";
+void Executor::createMallocInfo(std::string fileName,std::string input){
+  std::ofstream file;
+  if(!file){
+    file.open(fileName);
   }
-  
-  ObjectPair op;
-  bool success = state.addressSpace.resolveOneConstantSegment(
-      KValue(segmentValue, offsetValue), op);
-  //info << "\tpointing to: ";
-  if (!success) {
-    //info << "none\n";
-  } else {
-    const MemoryObject *mo = op.first;
-    std::string alloc_info;
-    mo->getAllocInfo(alloc_info);
-    //info << "object at " << mo->getSegmentString() << " of size "
-    //     << mo->getSizeString() << "\n"
-    //     << "\t\t" << alloc_info << "\n";
-    info << mo->getSizeString() ;
-  }
-
-  return info.str();
+  file << input ;
+  file.close();
 }
 
 
@@ -3462,45 +3435,17 @@ void Executor::reportErrorWithCrashInfo(std::set<std::string> cv,const llvm::Twi
                                                 enum TerminateReason termReason) {
   Instruction *lastInst;
   const InstructionInfo &ii = getLastNonKleeInternalInstruction(state, &lastInst);
+  
+  klee_message("This is the basic block of crash info %u", state.prevPC->inst->getParent()->getValueName()->second->getValueID());
 
   std::string MsgString;
-  //llvm::raw_string_ostream msg(MsgString);
 
   if(ii.file != ""){
     MsgString = std::to_string(ii.line);
   }
 
-  /**
-  auto it = cv.begin();
-  for(int i=0; i < (int)cv.size() ; i++){
-    msg << *it << ",";
-    it++;
-  }
-
-  msg << "Error: " << message << "\n";
-  if (ii.file != "") {
-    msg << "File: " << ii.file << "\n";
-    msg << "Line: " << ii.line << "\n";
-    msg << "assembly.ll line: " << ii.assemblyLine << "\n";
-  }
-
-  msg << "Stack: \n";
-  state.dumpStack(msg);
-
-  const auto info_str = info.str();
-  if (info_str != "")
-    msg << "Info: \n" << info_str;
-
-  msg << "Crash Variables: " << "\n";
-  for(int i=0; i < (int)cv.size() ; i++){
-    msg << "\t" << ii.line << ":" << *it << "\n";
-    it++;
-  }
-  **/
-
   std::string suffix_buf;
   if (!suffix) {
-    //suffix_buf = TerminateReasonNames[termReason];
     suffix_buf += "crash.txt";
     suffix = suffix_buf.c_str();
   }
@@ -3514,16 +3459,8 @@ void Executor::reportErrorWithCrashInfo(std::set<std::string> cv,const llvm::Twi
     file << *it << ",";
     it++;
   }
+  file << state.prevPC->inst->getParent()->getValueName()->second->getValueID();
   file.close();
-
-  //std::ifstream f(suffix);
-
-  //std::ifstream f(suffix);
-
-  //if (f.is_open())
-  //  std::cout << f.rdbuf();
-
-  //interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
 }
 
 void Executor::reportError(const llvm::Twine &message, const ExecutionState &state, const llvm::Twine &info, const char *suffix, enum TerminateReason termReason) {
@@ -3706,12 +3643,17 @@ void Executor::terminateStateOnError(ExecutionState &state,
   // or if we do not search for a specific error and we haven't emitted this error yet
   if (EmitAllErrors || haltExecution || (ExitOnErrorType.empty() && notemitted)) {
     std::set<std::string> cv = getCrashVaraibles(state.prevPC->inst,state.prevPC->info);
+    bool check = false;
+    klee_message("INFO: This is executed again.............................::::::::::::::::::::::::");
     if(cv.size()>0){
+      klee_message("INFO: This is executed again.............................::::::::::::::::::::::::");
       klee_message("INFO: Crash variable is detected");
+      check = true;
       reportErrorWithCrashInfo(cv, message.c_str(), state, info, suffix, termReason); 
       reportError(messaget, state, info, suffix, termReason); 
+      
     }
-    else{
+    else if(check){
       klee_message("INFO: Crash variable is not detected.");
       klee_message("INFO: Crash variable is part is null.");
       reportError(messaget, state, info, suffix, termReason);
@@ -3829,11 +3771,80 @@ static std::set<std::string> nokExternals({"fesetround", "fesetenv",
                                            "feupdateenv", "fesetexceptflag",
                                            "feclearexcept", "feraiseexcept"});
 
+
+
 void Executor::callExternalFunction(ExecutionState &state,
                                     KInstruction *target,
                                     Function *function,
                                     const std::vector<Cell> &arguments) {
   // check if specialFunctionHandler wants it
+  std::string Str1;
+  llvm::raw_string_ostream malloc_info(Str1);
+  if(std::strcmp(function->getName().str().c_str(), "malloc") == 0){
+    klee_message("*****START*******");
+    klee_message("This is call External Function");
+    klee_message("This is function name in which malloc is called %s",target->inst->getFunction()->getName().str().c_str());
+    malloc_info << state.prevPC->inst->getFunction()->getName().str().c_str() << ",";
+    klee_message("This is external function %s",function->getName().str().c_str());
+    malloc_info << function->getName().str().c_str() << ",";
+    klee_message("Line No:: %u", state.prevPC->info->line);
+    malloc_info << target->info->line << ",";
+    klee_message("Assembly line No:: %u", state.prevPC->info->assemblyLine);
+    malloc_info << state.prevPC->info->assemblyLine << ",";
+    klee_message("Line source location :::  %s", target->getSourceLocation().c_str());
+    klee_message("Malloc argument segment :::  %u", arguments[0].getSegment()->count);
+    klee_message("Malloc argument offset :::  %u", arguments[0].getOffset()->count); 
+    
+    llvm::Value *value = state.prevPC->inst->getOperand(0);
+    klee_message("This is basic block :: %s", state.prevPC->inst->getParent()->getValueName()->getKey().str().c_str());
+    klee_message("This is basic block :: %u", state.prevPC->inst->getParent()->getValueName()->second->getValueID());
+
+    bool check = false;
+    for (auto operand = value->user_begin(), ie = value->user_end(); operand != ie; ++operand) {
+      if (operand->getName().str().size() > 0) {
+        klee_message("Def of: %s", operand->getName().str().c_str());
+        malloc_info <<  operand->getName().str().c_str() << ",";
+      }
+      else{
+        check = true;
+      }
+    }    
+    //for (auto operand1 = use->get()->user_begin(), ie = use->get()->user_end(); operand1 != ie; ++operand1) {
+    //    if (operand1->getName().str().size() > 0) {
+    //            klee_message("Def of: %s", operand1->getName().str().c_str());
+    //            malloc_info <<  operand1->getName().str().c_str() << ",";
+    //          } 
+    //}
+    for (auto op = state.pc->inst->op_begin(); op != state.pc->inst->op_end(); op++) {
+      Value* v = op->get();
+      StringRef name = v->getName();
+      if (name.str().size() > 0) {
+                klee_message("Def of: %s", name.str().c_str());
+                malloc_info <<  name.str().c_str() << ",";
+      }
+       
+    }
+    malloc_info << state.prevPC->inst->getParent()->getValueName()->second->getValueID() << "\n" ;
+    //malloc_info << std::to_string(MALLOC_SIZE);
+    
+    if(check){
+      //print the size from getMallocInfo
+      klee_message("Assembly line No::");
+      klee_message("Assembly line No in IFFFFFF");
+    }
+    else{
+      klee_message("Assembly line No in ELSEEEEE");
+    }
+    std::string fileName = "malloc_info.txt";
+    std::ofstream file;
+    //if(!file){
+      file.open(fileName, std::ios_base::app);
+    //}
+    file << malloc_info.str().c_str() ;
+    file.close();
+    klee_message("*****END*******");
+  }
+  
   if (specialFunctionHandler->handle(state, function, target, arguments))
     return;
 
@@ -4256,6 +4267,7 @@ void Executor::executeMemoryWrite(ExecutionState &state, const KValue &address,
                                   const KValue &value) {
   executeMemoryOperation(state, true, address, value, 0);
 }
+
 void Executor::executeMemoryOperation(ExecutionState &state,
                                       bool isWrite,
                                       KValue address,
@@ -4395,15 +4407,17 @@ void Executor::executeMemoryOperation(ExecutionState &state,
     }
 
     unbound = branches.second;
+        
     if (!unbound)
       break;
   }
-  
   //klee_message("This is the crash location::");
   //backtrace(unbound->prevPC->inst->getOperand(0));
-
   // XXX should we distinguish out of bounds and overlapped cases?
   if (unbound) {
+
+    //getKValueMallocInfo(*unbound, optimAddress);
+    
     if (incomplete) {
       terminateStateEarly(*unbound, "Query timed out (resolve).");
     } else {
@@ -4479,7 +4493,7 @@ void Executor::backtrace(const llvm::Value *value) {
     std::string Str;
     llvm::raw_string_ostream instString(Str);
     instString << *(inst);
-    klee_message("I: %s", instString.str().c_str());
+    //klee_message("I: %s", instString.str().c_str());
     for (auto operand = inst->op_begin(), ie = inst->op_end(); operand != ie; ++operand) {
       if (operand->get()->getName().str().size() > 0) {
         klee_message("Def of: %s", operand->get()->getName().str().c_str());
@@ -4487,6 +4501,26 @@ void Executor::backtrace(const llvm::Value *value) {
       backtrace(operand->get());
     }
   }
+}
+
+inline const char* Executor::getSizeVariable(const llvm::Value *value) {
+  std::string vn="";
+  if (auto *inst = dyn_cast<llvm::Instruction>(value)) {
+    std::string Str;
+    llvm::raw_string_ostream instString(Str);
+    instString << *(inst);
+    //klee_message("I: %s", instString.str().c_str());
+    for (auto operand = inst->op_begin(), ie = inst->op_end(); operand != ie; ++operand) {
+      if (operand->get()->getName().str().size() > 0) {
+        klee_message("Def of: %s", operand->get()->getName().str().c_str());
+        //strcpy(vn, operand->get()->getName().str().c_str());
+        vn = operand->get()->getName().str().c_str();
+        klee_message("Def of string format: %s", vn.c_str());
+      }
+      getSizeVariable(operand->get());
+    }
+  }
+  return vn.c_str();
 }
 
 void Executor::executeMakeSymbolic(ExecutionState &state, 

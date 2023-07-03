@@ -76,8 +76,6 @@ namespace klee {
   class MergeHandler;
   template<class T> class ref;
 
-
-
   /// \todo Add a context object to keep track of data only live
   /// during an instruction step. Should contain addedStates,
   /// removedStates, and haltExecution, among others.
@@ -93,7 +91,6 @@ class Executor : public Interpreter {
 
 public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
-
   enum TerminateReason {
     Abort,
     Assert,
@@ -241,7 +238,9 @@ private:
 
   void run(ExecutionState &initialState);
   void backtrace(const llvm::Value *value);
+  inline const char* getSizeVariable(const llvm::Value *value);
 
+  void createMallocInfo(std::string fileName,std::string input);
   void reportErrorWithCrashInfo(std::set<std::string> cv,const llvm::Twine &message, 
                                           const ExecutionState &state, 
                                             const llvm::Twine &info, 
@@ -250,7 +249,13 @@ private:
 
   std::set<std::string> getCrashVaraibles(const llvm::Value *value, const klee::InstructionInfo *lineNo);
 
+  std::string getStringSize(ExecutionState &state,
+                                     const KValue &address) const;
+
   std::string getKValueCrashInfo(ExecutionState &state,
+                                     const KValue &address) const;
+
+  std::string getKValueMallocInfo(ExecutionState &state,
                                      const KValue &address) const;
 
   // Given a concrete object in our [klee's] address space, add it to 
